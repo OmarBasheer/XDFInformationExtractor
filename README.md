@@ -1,2 +1,268 @@
-# XDFInformationExtractor
-Extract information from a webpage as intended
+# XDF Information Extractor
+
+A browser extension that automates the extraction of XDF map data from mappack viewers and exports it to CSV format.
+
+## Overview
+
+This extension helps you extract XDF (eXtensible Data Format) map properties from web-based mappack viewers without manually right-clicking each map and viewing its properties. It can handle hundreds of maps automatically and export all the data to a CSV file.
+
+## Features
+
+- 🔍 **Automatic Scanning**: Detects XDF maps on the current webpage
+- 📊 **Batch Extraction**: Extracts data from multiple maps at once
+- 💾 **CSV Export**: Downloads extracted data as a CSV file
+- 👀 **Data Preview**: Shows a preview of extracted data before downloading
+- 🎨 **User-Friendly Interface**: Clean and intuitive popup interface
+
+## Extracted Data Fields
+
+The extension can extract the following properties from each map:
+- Address Start
+- Address End
+- Data Type
+- Map Name
+- Size
+- And any other custom properties available
+
+## Installation
+
+### Chrome / Edge / Brave
+
+1. Download or clone this repository
+2. Open your browser and navigate to:
+   - **Chrome**: `chrome://extensions/`
+   - **Edge**: `edge://extensions/`
+   - **Brave**: `brave://extensions/`
+3. Enable "Developer mode" (toggle in the top-right corner)
+4. Click "Load unpacked"
+5. Select the `XDFInformationExtractor` folder
+6. The extension icon should appear in your browser toolbar
+
+### Firefox
+
+1. Download or clone this repository
+2. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`
+3. Click "Load Temporary Add-on"
+4. Navigate to the `XDFInformationExtractor` folder and select the `manifest.json` file
+5. The extension will be loaded temporarily (until you restart Firefox)
+
+**Note**: For permanent installation in Firefox, the extension needs to be signed by Mozilla.
+
+## Usage
+
+### Basic Workflow
+
+1. **Navigate to your mappack viewer webpage**
+   - Open the website containing your XDF mappack (e.g., the one with 303 maps)
+
+2. **Open the extension**
+   - Click the extension icon in your browser toolbar
+
+3. **Scan for maps**
+   - Click the "Scan for Maps" button
+   - The extension will search the page for map elements
+   - You'll see how many maps were detected
+
+4. **Extract data**
+   - Click the "Extract Data" button
+   - The extension will extract properties from all detected maps
+   - A preview of the first few entries will be displayed
+
+5. **Download CSV**
+   - Click the "Download CSV" button
+   - Choose where to save the `xdf_map_data.csv` file
+   - Open the CSV file in Excel, Google Sheets, or any spreadsheet application
+
+### Tips for Best Results
+
+- **Ensure the page is fully loaded** before scanning for maps
+- **If the initial scan doesn't detect maps**, try:
+  - Refreshing the page
+  - Opening/expanding the map list if it's collapsed
+  - Making sure you're on the correct page section
+- **For large mappacks (300+ maps)**, the extraction may take a few seconds
+- **If data extraction fails**, you may need to customize the content script for your specific website structure (see Customization section)
+
+## Customization
+
+The generic extraction logic may not work perfectly with all mappack viewers. If you need to customize the extension for your specific website:
+
+### Modifying the Content Script
+
+Edit `content.js` to adjust the extraction logic:
+
+```javascript
+// Modify selectors to match your website's structure
+const possibleSelectors = [
+  '[class*="map"]',      // Elements with "map" in class name
+  '[id*="map"]',         // Elements with "map" in ID
+  // Add your custom selectors here
+];
+
+// Modify extraction patterns to match your data format
+const patterns = [
+  /address\s*start[:\s]+([0-9a-fx]+)/i,
+  /address\s*end[:\s]+([0-9a-fx]+)/i,
+  // Add your custom patterns here
+];
+```
+
+### Example Customizations
+
+If your maps are in a table:
+```javascript
+const rows = document.querySelectorAll('table#mapTable tbody tr');
+```
+
+If your maps have specific data attributes:
+```javascript
+const addressStart = element.getAttribute('data-address-start');
+const addressEnd = element.getAttribute('data-address-end');
+```
+
+## File Structure
+
+```
+XDFInformationExtractor/
+├── manifest.json          # Extension configuration
+├── popup.html            # Extension popup interface
+├── popup.css             # Popup styling
+├── popup.js              # Popup logic and UI interactions
+├── content.js            # Content script for data extraction
+├── icons/                # Extension icons
+│   ├── icon16.png
+│   ├── icon48.png
+│   ├── icon128.png
+│   └── icon.svg
+├── create-icons.js       # Script to generate placeholder icons
+└── README.md            # This file
+```
+
+## How It Works
+
+1. **Content Script Injection**: When you visit a webpage, the content script (`content.js`) is injected and runs in the page context
+2. **Map Detection**: The script scans the DOM for elements that might contain map data
+3. **Data Extraction**: When triggered, it extracts structured data from detected elements
+4. **CSV Generation**: The popup script converts the extracted data to CSV format
+5. **File Download**: The browser's download API saves the CSV file to your chosen location
+
+## Troubleshooting
+
+### "Could not connect to page" error
+- Refresh the webpage and try again
+- Make sure you're on the correct website/page
+- Check that the extension has permission to access the current site
+
+### No maps detected
+- Verify you're on the page showing the mappack
+- Try expanding or scrolling through the map list
+- The page structure might need custom selectors (see Customization)
+
+### Data extraction returns empty results
+- The website might use dynamic content loading
+- Custom extraction logic might be needed for your specific site
+- Check browser console (F12) for any error messages
+
+### CSV file is empty or incomplete
+- Ensure maps were successfully extracted (check the preview)
+- Try extracting again
+- Verify the page structure matches expected patterns
+
+## Development
+
+### Requirements
+- Node.js (for creating icons, optional)
+- Modern web browser (Chrome, Firefox, Edge, or Brave)
+
+### Making Changes
+
+1. Edit the relevant files
+2. Reload the extension in your browser:
+   - Go to `chrome://extensions/` (or equivalent)
+   - Click the refresh icon on the extension card
+3. Test your changes on the target website
+
+### Adding New Features
+
+To add new data fields to extract:
+1. Update the extraction patterns in `content.js`
+2. The CSV export will automatically include new fields
+
+## Privacy & Permissions
+
+This extension requires the following permissions:
+
+- **activeTab**: Access the currently active tab to extract data
+- **scripting**: Inject the content script into webpages
+- **downloads**: Save the CSV file to your computer
+
+**Privacy Note**: This extension:
+- Does NOT send any data to external servers
+- Does NOT collect or store personal information
+- Only processes data from the current webpage locally
+- Only accesses pages when you explicitly trigger it
+
+## Browser Compatibility
+
+| Browser | Status | Notes |
+|---------|--------|-------|
+| Chrome  | ✅ Supported | Manifest V3 |
+| Edge    | ✅ Supported | Manifest V3 |
+| Brave   | ✅ Supported | Manifest V3 |
+| Firefox | ⚠️  Temporary | Requires temporary loading or signing |
+| Opera   | ✅ Supported | Manifest V3 |
+
+## Known Limitations
+
+- Generic extraction may not work with all mappack viewer implementations
+- Some websites may use dynamic content that requires custom handling
+- Right-click context menu automation is limited by browser security
+- Firefox requires manual reload after browser restart (or proper signing)
+
+## Future Enhancements
+
+Potential improvements for future versions:
+- [ ] Auto-detect common mappack viewer patterns
+- [ ] Support for additional export formats (JSON, Excel)
+- [ ] Batch processing with progress indicators
+- [ ] Custom field mapping UI
+- [ ] Preset configurations for popular XDF tools
+
+## Contributing
+
+Contributions are welcome! If you have improvements or bug fixes:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## Support
+
+If you encounter issues or need help:
+
+1. Check the Troubleshooting section above
+2. Review the browser console for error messages
+3. Open an issue on GitHub with:
+   - Browser version
+   - Extension version
+   - Description of the problem
+   - Steps to reproduce
+
+## License
+
+This project is provided as-is for extracting XDF map data from web-based mappack viewers.
+
+## Changelog
+
+### Version 1.0.0 (Initial Release)
+- Basic map scanning and detection
+- Data extraction from webpage elements
+- CSV export functionality
+- User-friendly popup interface
+- Support for Chrome, Edge, Brave, and Firefox
+
+---
+
+**Note**: This extension provides a generic framework for extracting XDF map data. Depending on your specific mappack viewer's implementation, you may need to customize the extraction logic in `content.js` to match your website's structure.

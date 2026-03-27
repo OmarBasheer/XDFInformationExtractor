@@ -1,0 +1,16 @@
+<svg width="128" height="128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="128" height="128" rx="20" fill="#2196F3"/>
+
+  <!-- Document icon -->
+  <rect x="30" y="25" width="68" height="85" rx="4" fill="white"/>
+  <rect x="40" y="40" width="48" height="4" rx="2" fill="#2196F3"/>
+  <rect x="40" y="52" width="48" height="4" rx="2" fill="#2196F3"/>
+  <rect x="40" y="64" width="36" height="4" rx="2" fill="#2196F3"/>
+  <rect x="40" y="76" width="42" height="4" rx="2" fill="#2196F3"/>
+  <rect x="40" y="88" width="38" height="4" rx="2" fill="#2196F3"/>
+
+  <!-- Download arrow -->
+  <circle cx="90" cy="95" r="18" fill="#FF9800"/>
+  <path d="M 90 85 L 90 100 M 85 95 L 90 100 L 95 95" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>
