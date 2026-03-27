@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XDF Information Extractor</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>XDF Information Extractor</h1>
+    <div class="info">
+      <p>Extract XDF map data from the current page and export to CSV.</p>
+    </div>
+
+    <div class="status" id="status">
+      <p>Ready to extract data...</p>
+    </div>
+
+    <div class="stats" id="stats" style="display: none;">
+      <p>Maps found: <span id="mapCount">0</span></p>
+    </div>
+
+    <div class="buttons">
+      <button id="scanBtn" class="btn btn-primary">Scan for Maps</button>
+      <button id="extractBtn" class="btn btn-success" disabled>Extract Data</button>
+      <button id="downloadBtn" class="btn btn-download" disabled>Download CSV</button>
+    </div>
+
+    <div class="preview" id="preview" style="display: none;">
+      <h3>Data Preview:</h3>
+      <div id="previewContent"></div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
