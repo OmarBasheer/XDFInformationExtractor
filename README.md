@@ -8,12 +8,18 @@ This extension helps you extract XDF (eXtensible Data Format) map properties fro
 
 ## Features
 
-- 🔍 **Automatic Scanning**: Detects XDF maps on the current webpage
+- 🔍 **Intelligent Map Detection**: Uses 5 advanced detection strategies to find map elements
+  - **Pattern Recognition**: Finds repeating DOM structures
+  - **Keyword Analysis**: Detects XDF-specific terminology
+  - **Interactive Elements**: Identifies clickable/selectable items
+  - **Structured Data**: Recognizes tables, lists, and grids
+  - **Visual Analysis**: Analyzes layout patterns and positioning
 - 🤖 **Automated Clicking**: Automatically clicks each map and extracts properties without manual intervention
 - 📊 **Batch Extraction**: Extracts data from multiple maps at once
 - 🎯 **Multi-Method Extraction**: Tries click, right-click, and double-click to trigger property dialogs
 - 💾 **CSV Export**: Downloads extracted data as a CSV file
 - 👀 **Data Preview**: Shows a preview of extracted data before downloading
+- 🛠️ **Debug Tools**: Built-in console commands for troubleshooting detection issues
 - 🎨 **User-Friendly Interface**: Clean and intuitive popup interface
 
 ## Extracted Data Fields
@@ -178,15 +184,54 @@ XDFInformationExtractor/
 
 ## Troubleshooting
 
+### Using Built-in Debug Tools
+
+If maps aren't being detected, open your browser's console (press F12) and use these debugging commands:
+
+#### 1. Analyze Page Structure
+```javascript
+window.xdfDebugAnalyzePage()
+```
+This shows:
+- Count of all element types on the page
+- Large tables and lists that might contain map data
+- Overall page structure
+
+#### 2. View All Detection Candidates
+```javascript
+window.xdfDebugShowCandidates()
+```
+This runs all 5 detection strategies and shows what each found:
+- Pattern candidates (repeating structures)
+- Keyword candidates (XDF-related content)
+- Interactive candidates (clickable elements)
+- Structured data candidates (tables/lists)
+- Visual pattern candidates (layout-based detection)
+
+#### 3. Manually Mark Map Elements
+If you can see the maps but the extension can't detect them:
+1. Right-click on a map element and select "Inspect"
+2. In the console, type:
+```javascript
+window.xdfDebugMarkElement($0)
+```
+This will:
+- Mark the element with a red outline
+- Find all similar sibling elements
+- Automatically set them as map elements
+- You can then run extraction normally
+
 ### "Could not connect to page" error
 - Refresh the webpage and try again
 - Make sure you're on the correct website/page
 - Check that the extension has permission to access the current site
 
 ### No maps detected
+- Use the debug tools above to investigate
 - Verify you're on the page showing the mappack
 - Try expanding or scrolling through the map list
 - The page structure might need custom selectors (see Customization)
+- Check browser console (F12) for detection statistics
 
 ### Data extraction returns empty results
 - The website might use dynamic content loading
@@ -287,6 +332,22 @@ If you encounter issues or need help:
 This project is provided as-is for extracting XDF map data from web-based mappack viewers.
 
 ## Changelog
+
+### Version 1.1.0 (Robust Detection Update)
+- **Complete rewrite of map detection system from scratch**
+- **5 intelligent detection strategies**:
+  - Pattern recognition: Finds repeating DOM structures
+  - Keyword analysis: Detects XDF/calibration-specific terminology
+  - Interactive element detection: Identifies clickable/selectable items
+  - Structured data recognition: Analyzes tables, lists, and grids
+  - Visual pattern analysis: Uses layout and positioning
+- **Smart scoring system**: Combines results from all strategies
+- **Built-in debugging tools**:
+  - `window.xdfDebugAnalyzePage()` - Analyze page structure
+  - `window.xdfDebugShowCandidates()` - View all detection candidates
+  - `window.xdfDebugMarkElement($0)` - Manually mark map elements
+- **Detailed console logging** with statistics for each detection strategy
+- **Automatic fallback** to best-scoring elements when no perfect match found
 
 ### Version 1.0.0 (Initial Release)
 - Basic map scanning and detection

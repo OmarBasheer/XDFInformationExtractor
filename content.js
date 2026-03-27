@@ -20,49 +20,68 @@
     }
   });
 
-  // Scan the page to find maps
+  // Scan the page to find maps - NEW ROBUST APPROACH
   function scanForMaps(sendResponse) {
     try {
-      // Look for common patterns in XDF map viewers
-      // This is a generic approach - may need customization based on actual website structure
-
-      // Try different selectors that might contain map elements
-      const possibleSelectors = [
-        '[class*="map"]',
-        '[id*="map"]',
-        '[class*="item"]',
-        '[data-map]',
-        'li',
-        'div[onclick]',
-        'tr'
-      ];
-
+      console.log('=== XDF Map Detection Starting ===');
       mapElements = [];
 
-      for (const selector of possibleSelectors) {
-        const elements = document.querySelectorAll(selector);
-        if (elements.length > 0 && elements.length < 1000) {
-          // Check if elements have properties that look like map data
-          for (const elem of elements) {
-            if (hasMapProperties(elem)) {
-              mapElements.push(elem);
-            }
-          }
-          if (mapElements.length > 0) break;
-        }
-      }
+      // Strategy 1: Analyze DOM structure for repeating patterns
+      const patternCandidates = findRepeatingPatterns();
+      console.log('Pattern candidates found:', patternCandidates.length);
 
-      // If no maps found with specific selectors, try to find clickable elements
-      if (mapElements.length === 0) {
-        mapElements = findClickableMapElements();
+      // Strategy 2: Look for elements with XDF-specific keywords
+      const keywordCandidates = findElementsWithXDFKeywords();
+      console.log('Keyword candidates found:', keywordCandidates.length);
+
+      // Strategy 3: Find clickable/interactive elements
+      const interactiveCandidates = findInteractiveElements();
+      console.log('Interactive candidates found:', interactiveCandidates.length);
+
+      // Strategy 4: Look for structured data (tables, lists, grids)
+      const structuredCandidates = findStructuredDataElements();
+      console.log('Structured data candidates found:', structuredCandidates.length);
+
+      // Strategy 5: Analyze visual layout for grid/list patterns
+      const visualCandidates = findVisualPatterns();
+      console.log('Visual pattern candidates found:', visualCandidates.length);
+
+      // Combine and score all candidates
+      const allCandidates = [
+        ...patternCandidates,
+        ...keywordCandidates,
+        ...interactiveCandidates,
+        ...structuredCandidates,
+        ...visualCandidates
+      ];
+
+      // Remove duplicates and score each element
+      const scoredElements = scoreAndDeduplicateCandidates(allCandidates);
+      console.log('Total unique candidates:', scoredElements.length);
+
+      // Filter by score threshold and select the best set
+      mapElements = selectBestMapElements(scoredElements);
+
+      console.log('=== Detection Complete ===');
+      console.log('Final map elements selected:', mapElements.length);
+
+      // Log details about detected elements for debugging
+      if (mapElements.length > 0) {
+        logDetectionDetails(mapElements);
+      } else {
+        console.warn('No map elements detected. Try these debugging commands:');
+        console.log('1. window.xdfDebugShowCandidates() - Show all candidate elements');
+        console.log('2. window.xdfDebugAnalyzePage() - Analyze page structure');
+        console.log('3. Click on an element and run: window.xdfDebugMarkElement($0) - Mark clicked element as map');
       }
 
       sendResponse({
         success: true,
         count: mapElements.length,
-        message: `Found ${mapElements.length} potential map elements`
+        message: `Found ${mapElements.length} potential map elements using intelligent detection`
       });
     } catch (error) {
+      console.error('Map detection error:', error);
       sendResponse({
         success: false,
         error: error.message
@@ -70,31 +89,531 @@
     }
   }
 
-  // Check if element has map-like properties
-  function hasMapProperties(element) {
-    const text = element.textContent || '';
-    const attrs = Array.from(element.attributes).map(a => a.name + '=' + a.value).join(' ');
+  // ============ NEW DETECTION STRATEGIES ============
 
-    // Look for keywords that might indicate map data
-    const keywords = ['address', 'start', 'end', 'data', 'type', 'map', 'xdf'];
-    const content = (text + ' ' + attrs).toLowerCase();
+  // Strategy 1: Find repeating patterns in DOM structure
+  function findRepeatingPatterns() {
+    const candidates = [];
+    const elementsAnalyzed = new Map(); // tag -> array of elements
 
-    return keywords.some(keyword => content.includes(keyword));
+    // Group elements by tag name
+    const commonTags = ['div', 'li', 'tr', 'span', 'a', 'article', 'section'];
+    commonTags.forEach(tag => {
+      const elements = Array.from(document.querySelectorAll(tag));
+      if (elements.length >= 10 && elements.length <= 5000) {
+        elementsAnalyzed.set(tag, elements);
+      }
+    });
+
+    // Find elements with similar structure (same children, similar attributes)
+    elementsAnalyzed.forEach((elements, tag) => {
+      const similarGroups = groupBySimilarStructure(elements);
+
+      // Keep groups with at least 10 similar elements
+      similarGroups.forEach(group => {
+        if (group.length >= 10) {
+          candidates.push(...group);
+        }
+      });
+    });
+
+    return candidates;
   }
 
-  // Find clickable elements that might be maps
-  function findClickableMapElements() {
-    const clickableElements = document.querySelectorAll('[onclick], a, button, [role="button"]');
-    const maps = [];
+  // Group elements by similar DOM structure
+  function groupBySimilarStructure(elements) {
+    const groups = [];
+    const signatures = new Map(); // signature -> array of elements
 
-    for (const elem of clickableElements) {
-      if (hasMapProperties(elem)) {
-        maps.push(elem);
+    elements.forEach(elem => {
+      const sig = getElementStructureSignature(elem);
+      if (!signatures.has(sig)) {
+        signatures.set(sig, []);
       }
+      signatures.get(sig).push(elem);
+    });
+
+    signatures.forEach(group => {
+      if (group.length >= 10) {
+        groups.push(group);
+      }
+    });
+
+    return groups;
+  }
+
+  // Create a signature for an element's structure
+  function getElementStructureSignature(elem) {
+    const childTags = Array.from(elem.children).map(c => c.tagName).join(',');
+    const classPattern = elem.className ? elem.className.split(' ').sort().join(' ') : '';
+    const attrCount = elem.attributes.length;
+    return `${elem.tagName}|${childTags}|${classPattern}|${attrCount}`;
+  }
+
+  // Strategy 2: Find elements with XDF/map-specific keywords
+  function findElementsWithXDFKeywords() {
+    const candidates = [];
+
+    // Keywords that suggest XDF map data
+    const strongKeywords = ['xdf', 'mappack', 'calibration', 'tuning', 'ecu'];
+    const mediumKeywords = ['address', 'offset', 'hexadecimal', '0x', 'byte', 'word'];
+    const weakKeywords = ['map', 'table', 'data', 'value', 'parameter'];
+
+    // Search through all elements
+    const allElements = document.querySelectorAll('*');
+
+    allElements.forEach(elem => {
+      if (elem.children.length > 20) return; // Skip container elements
+
+      const text = (elem.textContent || '').toLowerCase();
+      const attrs = Array.from(elem.attributes)
+        .map(a => a.name + '=' + a.value)
+        .join(' ')
+        .toLowerCase();
+      const content = text + ' ' + attrs;
+
+      // Score based on keyword matches
+      let score = 0;
+      strongKeywords.forEach(kw => {
+        if (content.includes(kw)) score += 10;
+      });
+      mediumKeywords.forEach(kw => {
+        if (content.includes(kw)) score += 5;
+      });
+      weakKeywords.forEach(kw => {
+        if (content.includes(kw)) score += 2;
+      });
+
+      // Bonus for hexadecimal patterns
+      if (/0x[0-9a-f]+/i.test(content)) score += 5;
+
+      if (score >= 7) {
+        candidates.push(elem);
+      }
+    });
+
+    return candidates;
+  }
+
+  // Strategy 3: Find interactive/clickable elements
+  function findInteractiveElements() {
+    const candidates = [];
+
+    // Find elements with event listeners or interactive attributes
+    const selectors = [
+      '[onclick]',
+      '[oncontextmenu]',
+      '[ondblclick]',
+      'a[href]',
+      'button',
+      '[role="button"]',
+      '[role="row"]',
+      '[role="gridcell"]',
+      '[tabindex]',
+      '.clickable',
+      '.selectable',
+      '[data-id]',
+      '[data-key]'
+    ];
+
+    selectors.forEach(selector => {
+      try {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(elem => {
+          // Filter out navigation and common UI elements
+          if (!isLikelyNavigationElement(elem)) {
+            candidates.push(elem);
+          }
+        });
+      } catch (e) {
+        // Skip invalid selectors
+      }
+    });
+
+    return candidates;
+  }
+
+  // Check if element is likely a navigation element
+  function isLikelyNavigationElement(elem) {
+    const text = (elem.textContent || '').toLowerCase();
+    const navKeywords = ['home', 'menu', 'login', 'logout', 'settings', 'help', 'about', 'contact', 'search'];
+
+    // Short text that matches nav keywords
+    if (text.length < 50 && navKeywords.some(kw => text.includes(kw))) {
+      return true;
     }
 
-    return maps;
+    // In header, nav, or footer
+    const parent = elem.closest('header, nav, footer');
+    if (parent) return true;
+
+    return false;
   }
+
+  // Strategy 4: Find structured data elements
+  function findStructuredDataElements() {
+    const candidates = [];
+
+    // Table rows
+    const tables = document.querySelectorAll('table');
+    tables.forEach(table => {
+      const rows = table.querySelectorAll('tbody tr');
+      if (rows.length >= 10 && rows.length <= 10000) {
+        // Check if rows contain data-like content
+        const firstRow = rows[0];
+        if (firstRow && seemsLikeDataRow(firstRow)) {
+          candidates.push(...Array.from(rows));
+        }
+      }
+    });
+
+    // List items
+    const lists = document.querySelectorAll('ul, ol');
+    lists.forEach(list => {
+      const items = list.querySelectorAll('li');
+      if (items.length >= 10 && items.length <= 10000) {
+        const firstItem = items[0];
+        if (firstItem && seemsLikeDataItem(firstItem)) {
+          candidates.push(...Array.from(items));
+        }
+      }
+    });
+
+    // Grid layouts (divs with similar structure)
+    const grids = document.querySelectorAll('[class*="grid"], [class*="list"], [class*="container"]');
+    grids.forEach(grid => {
+      const children = Array.from(grid.children);
+      if (children.length >= 10 && children.length <= 10000) {
+        // Check if children are similar
+        const groups = groupBySimilarStructure(children);
+        groups.forEach(group => {
+          if (group.length >= 10) {
+            candidates.push(...group);
+          }
+        });
+      }
+    });
+
+    return candidates;
+  }
+
+  // Check if a table row seems to contain data
+  function seemsLikeDataRow(row) {
+    const cells = row.querySelectorAll('td, th');
+    if (cells.length === 0) return false;
+
+    // Check for data patterns
+    let hasNumbers = false;
+    let hasText = false;
+
+    cells.forEach(cell => {
+      const text = cell.textContent.trim();
+      if (/[0-9]/.test(text)) hasNumbers = true;
+      if (/[a-z]/i.test(text)) hasText = true;
+    });
+
+    return hasNumbers || hasText;
+  }
+
+  // Check if a list item seems to contain data
+  function seemsLikeDataItem(item) {
+    const text = item.textContent.trim();
+
+    // Has some content
+    if (text.length === 0) return false;
+
+    // Not too long (probably not a paragraph)
+    if (text.length > 500) return false;
+
+    // Contains some structure (child elements or formatting)
+    if (item.children.length > 0) return true;
+
+    // Contains colon (key-value pair indicator)
+    if (text.includes(':')) return true;
+
+    return true;
+  }
+
+  // Strategy 5: Analyze visual patterns
+  function findVisualPatterns() {
+    const candidates = [];
+
+    try {
+      // Find elements that are positioned in a regular grid or list
+      const allVisibleElements = Array.from(document.querySelectorAll('*')).filter(elem => {
+        return isVisible(elem) && !isContainerElement(elem);
+      });
+
+      // Group by similar position patterns (Y-coordinate)
+      const rows = groupByYPosition(allVisibleElements);
+
+      // Find rows with many similar elements
+      rows.forEach(row => {
+        if (row.length >= 5) {
+          // Check if elements in row are similar
+          const groups = groupBySimilarStructure(row);
+          groups.forEach(group => {
+            if (group.length >= 5) {
+              candidates.push(...group);
+            }
+          });
+        }
+      });
+    } catch (e) {
+      console.warn('Visual pattern detection error:', e);
+    }
+
+    return candidates;
+  }
+
+  // Group elements by Y position (rows)
+  function groupByYPosition(elements) {
+    const rows = new Map();
+    const tolerance = 10; // pixels
+
+    elements.forEach(elem => {
+      try {
+        const rect = elem.getBoundingClientRect();
+        const y = Math.round(rect.top / tolerance) * tolerance;
+
+        if (!rows.has(y)) {
+          rows.set(y, []);
+        }
+        rows.get(y).push(elem);
+      } catch (e) {
+        // Skip elements that can't be measured
+      }
+    });
+
+    return Array.from(rows.values());
+  }
+
+  // Check if element is a container (many children)
+  function isContainerElement(elem) {
+    return elem.children.length > 20;
+  }
+
+  // Score and deduplicate candidates
+  function scoreAndDeduplicateCandidates(candidates) {
+    const elementScores = new Map(); // element -> score object
+
+    candidates.forEach(elem => {
+      if (!elementScores.has(elem)) {
+        elementScores.set(elem, {
+          element: elem,
+          score: 0,
+          reasons: []
+        });
+      }
+
+      const scoreObj = elementScores.get(elem);
+      scoreObj.score += 1;
+    });
+
+    // Enhance scoring with additional factors
+    elementScores.forEach((scoreObj, elem) => {
+      // Boost score for elements with data attributes
+      if (elem.dataset && Object.keys(elem.dataset).length > 0) {
+        scoreObj.score += 2;
+        scoreObj.reasons.push('has data attributes');
+      }
+
+      // Boost score for elements with specific classes
+      const className = elem.className || '';
+      if (/item|row|entry|record|map/i.test(className)) {
+        scoreObj.score += 3;
+        scoreObj.reasons.push('has relevant class name');
+      }
+
+      // Boost score for visible elements
+      if (isVisible(elem)) {
+        scoreObj.score += 2;
+        scoreObj.reasons.push('is visible');
+      }
+
+      // Penalize very small elements
+      try {
+        const rect = elem.getBoundingClientRect();
+        if (rect.width < 20 || rect.height < 10) {
+          scoreObj.score -= 5;
+          scoreObj.reasons.push('too small');
+        }
+      } catch (e) {
+        // Skip
+      }
+
+      // Penalize elements with no text content
+      if (!elem.textContent || elem.textContent.trim().length === 0) {
+        scoreObj.score -= 3;
+        scoreObj.reasons.push('no text content');
+      }
+    });
+
+    return Array.from(elementScores.values());
+  }
+
+  // Select the best set of map elements
+  function selectBestMapElements(scoredElements) {
+    // Sort by score descending
+    scoredElements.sort((a, b) => b.score - a.score);
+
+    // Group by parent to find consistent sets
+    const parentGroups = new Map();
+
+    scoredElements.forEach(scoreObj => {
+      const parent = scoreObj.element.parentElement;
+      if (parent) {
+        if (!parentGroups.has(parent)) {
+          parentGroups.set(parent, []);
+        }
+        parentGroups.get(parent).push(scoreObj);
+      }
+    });
+
+    // Find the largest group with good scores
+    let bestGroup = [];
+    let bestGroupScore = 0;
+
+    parentGroups.forEach((group, parent) => {
+      if (group.length >= 10) {
+        const avgScore = group.reduce((sum, s) => sum + s.score, 0) / group.length;
+        const groupScore = group.length * avgScore;
+
+        if (groupScore > bestGroupScore) {
+          bestGroup = group;
+          bestGroupScore = groupScore;
+        }
+      }
+    });
+
+    // If we found a good group, use it
+    if (bestGroup.length >= 10) {
+      console.log('Selected group with', bestGroup.length, 'elements, avg score:',
+                  (bestGroupScore / bestGroup.length).toFixed(2));
+      return bestGroup.map(s => s.element);
+    }
+
+    // Otherwise, take top-scored elements that have decent scores
+    const threshold = Math.max(5, scoredElements[0]?.score * 0.6 || 5);
+    const selected = scoredElements
+      .filter(s => s.score >= threshold)
+      .slice(0, 1000) // Limit to reasonable number
+      .map(s => s.element);
+
+    return selected;
+  }
+
+  // Log details about detected elements
+  function logDetectionDetails(elements) {
+    console.log('=== Detection Details ===');
+    console.log('Total elements:', elements.length);
+
+    if (elements.length > 0) {
+      const sample = elements[0];
+      console.log('Sample element:', sample);
+      console.log('Tag:', sample.tagName);
+      console.log('Classes:', sample.className);
+      console.log('Parent:', sample.parentElement?.tagName);
+      console.log('Text preview:', sample.textContent?.substring(0, 100));
+    }
+
+    // Show element distribution
+    const tagCounts = {};
+    elements.forEach(elem => {
+      const tag = elem.tagName;
+      tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+    });
+    console.log('Element types:', tagCounts);
+  }
+
+  // ============ DEBUGGING FUNCTIONS ============
+
+  // Make debugging functions available globally
+  window.xdfDebugShowCandidates = function() {
+    console.log('Analyzing page for all possible candidates...');
+
+    const pattern = findRepeatingPatterns();
+    const keyword = findElementsWithXDFKeywords();
+    const interactive = findInteractiveElements();
+    const structured = findStructuredDataElements();
+    const visual = findVisualPatterns();
+
+    console.log('Pattern candidates:', pattern.length, pattern);
+    console.log('Keyword candidates:', keyword.length, keyword);
+    console.log('Interactive candidates:', interactive.length, interactive);
+    console.log('Structured candidates:', structured.length, structured);
+    console.log('Visual candidates:', visual.length, visual);
+
+    return {
+      pattern,
+      keyword,
+      interactive,
+      structured,
+      visual
+    };
+  };
+
+  window.xdfDebugAnalyzePage = function() {
+    console.log('=== Page Structure Analysis ===');
+
+    // Count element types
+    const tags = {};
+    document.querySelectorAll('*').forEach(elem => {
+      const tag = elem.tagName;
+      tags[tag] = (tags[tag] || 0) + 1;
+    });
+    console.log('Element counts:', tags);
+
+    // Find large lists/tables
+    console.log('\nLarge tables:');
+    document.querySelectorAll('table').forEach(table => {
+      const rows = table.querySelectorAll('tr').length;
+      if (rows > 5) {
+        console.log(`  - Table with ${rows} rows`, table);
+      }
+    });
+
+    console.log('\nLarge lists:');
+    document.querySelectorAll('ul, ol').forEach(list => {
+      const items = list.querySelectorAll('li').length;
+      if (items > 5) {
+        console.log(`  - List with ${items} items`, list);
+      }
+    });
+
+    return { tags };
+  };
+
+  window.xdfDebugMarkElement = function(element) {
+    if (!element) {
+      console.error('No element provided. In DevTools, click an element and run: xdfDebugMarkElement($0)');
+      return;
+    }
+
+    console.log('Marking element as map:', element);
+    element.style.outline = '3px solid red';
+    element.setAttribute('data-xdf-map', 'true');
+
+    // Try to find siblings
+    const parent = element.parentElement;
+    if (parent) {
+      const siblings = Array.from(parent.children).filter(child => {
+        return child.tagName === element.tagName &&
+               child.className === element.className;
+      });
+      console.log(`Found ${siblings.length} similar siblings`);
+
+      if (siblings.length > 1) {
+        console.log('Marking all siblings...');
+        siblings.forEach(sib => {
+          sib.style.outline = '2px solid orange';
+          sib.setAttribute('data-xdf-map', 'true');
+        });
+        mapElements = siblings;
+        console.log(`Set ${siblings.length} elements as maps. Run extraction to process them.`);
+      }
+    }
+  };
 
   // Extract data from all maps
   async function extractMapData(sendResponse) {
