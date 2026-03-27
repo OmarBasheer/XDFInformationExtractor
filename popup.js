@@ -21,7 +21,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
       chrome.tabs.sendMessage(tab.id, { action: 'scanMaps' }, function(response) {
         if (chrome.runtime.lastError) {
-          updateStatus('Error: Could not connect to page. Please refresh the page and try again.', true);
+          updateStatus('Error: Could not connect to page. Please refresh the page and try again. Details: ' + chrome.runtime.lastError.message, true);
+          scanBtn.disabled = false;
+          return;
+        }
+
+        if (!response) {
+          updateStatus('Error: No response from page. Please refresh and try again.', true);
           scanBtn.disabled = false;
           return;
         }
@@ -52,22 +58,43 @@ document.addEventListener('DOMContentLoaded', function() {
 
       chrome.tabs.sendMessage(tab.id, { action: 'extractData' }, function(response) {
         if (chrome.runtime.lastError) {
-          updateStatus('Error: Could not connect to page.', true);
+          updateStatus('Error: Could not connect to page. Details: ' + chrome.runtime.lastError.message, true);
+          extractBtn.disabled = false;
+          return;
+        }
+
+        if (!response) {
+          updateStatus('Error: No response from page. Please refresh and try again.', true);
           extractBtn.disabled = false;
           return;
         }
 
         if (response.success) {
-          // Get the full data
-          chrome.tabs.sendMessage(tab.id, { action: 'getData' }, function(dataResponse) {
-            extractedData = dataResponse.data;
-
+          // Get the full data - but check if response already includes it
+          if (response.data && response.data.length > 0) {
+            // extractData already returned the full data, use it directly
+            extractedData = response.data;
             updateStatus(`Successfully extracted data from ${response.count} maps!`, false);
             downloadBtn.disabled = false;
+            showPreview(extractedData.slice(0, 5));
+          } else {
+            // Fallback: request full data separately
+            chrome.tabs.sendMessage(tab.id, { action: 'getData' }, function(dataResponse) {
+              if (chrome.runtime.lastError || !dataResponse) {
+                updateStatus('Error: Could not retrieve extracted data.', true);
+                extractBtn.disabled = false;
+                return;
+              }
 
-            // Show preview
-            showPreview(response.data || extractedData.slice(0, 5));
-          });
+              extractedData = dataResponse.data || [];
+
+              updateStatus(`Successfully extracted data from ${response.count} maps!`, false);
+              downloadBtn.disabled = false;
+
+              // Show preview
+              showPreview(extractedData.slice(0, 5));
+            });
+          }
         } else {
           updateStatus('Error: ' + response.error, true);
           extractBtn.disabled = false;
@@ -93,7 +120,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Update status message
   function updateStatus(message, isError) {
-    status.querySelector('p').textContent = message;
+    const statusText = status.querySelector('p');
+    if (statusText) {
+      statusText.textContent = message;
+    }
     if (isError) {
       status.classList.add('error');
     } else {
@@ -170,6 +200,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }, function(downloadId) {
       // Clean up the blob URL after download starts
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      if (chrome.runtime.lastError) {
+        console.error('Download error:', chrome.runtime.lastError.message);
+      }
     });
+
+    // Ensure cleanup happens even if download callback fails
+    setTimeout(() => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        // URL already revoked, ignore
+      }
+    }, 5000);
   }
 });

@@ -97,7 +97,7 @@
   }
 
   // Extract data from all maps
-  function extractMapData(sendResponse) {
+  async function extractMapData(sendResponse) {
     try {
       extractedData = [];
 
@@ -108,14 +108,14 @@
         sendResponse({
           success: true,
           count: extractedData.length,
-          data: extractedData.slice(0, 5)
+          data: extractedData
         });
         return;
       }
 
       // Strategy 2: Automatically click on each map and extract properties
       if (mapElements.length > 0) {
-        extractByClickingMaps(sendResponse);
+        await extractByClickingMaps(sendResponse);
         return;
       }
 
@@ -151,7 +151,7 @@
       sendResponse({
         success: true,
         count: extractedData.length,
-        data: extractedData.slice(0, 5) // Send preview of first 5 items
+        data: extractedData
       });
     } else {
       sendResponse({
@@ -168,27 +168,28 @@
     // Try to find labeled data (e.g., "Address Start: 0x1000")
     const text = element.textContent || '';
     const patterns = [
-      /address\s*start[:\s]+([0-9a-fx]+)/i,
-      /address\s*end[:\s]+([0-9a-fx]+)/i,
-      /data\s*type[:\s]+([^\n,]+)/i,
-      /type[:\s]+([^\n,]+)/i,
-      /size[:\s]+([0-9]+)/i,
-      /name[:\s]+([^\n,]+)/i
+      { regex: /address\s*start[:\s]+([0-9a-fx]+)/i, key: 'Address Start' },
+      { regex: /address\s*end[:\s]+([0-9a-fx]+)/i, key: 'Address End' },
+      { regex: /data\s*type[:\s]+([^\n,]+)/i, key: 'Data Type' },
+      { regex: /type[:\s]+([^\n,]+)/i, key: 'Type' },
+      { regex: /size[:\s]+([0-9]+)/i, key: 'Size' },
+      { regex: /name[:\s]+([^\n,]+)/i, key: 'Name' }
     ];
 
     for (const pattern of patterns) {
-      const match = text.match(pattern);
+      const match = text.match(pattern.regex);
       if (match) {
-        const key = pattern.source.split('[')[0].replace(/\\/g, '').trim();
-        data[key] = match[1].trim();
+        data[pattern.key] = match[1].trim();
       }
     }
 
     // Also try to extract from data attributes
-    for (const attr of element.attributes) {
-      if (attr.name.startsWith('data-')) {
-        const key = attr.name.replace('data-', '').replace(/-/g, ' ');
-        data[key] = attr.value;
+    if (element.attributes) {
+      for (const attr of element.attributes) {
+        if (attr.name.startsWith('data-')) {
+          const key = attr.name.replace('data-', '').replace(/-/g, ' ');
+          data[key] = attr.value;
+        }
       }
     }
 
@@ -208,6 +209,12 @@
 
       for (let i = 0; i < mapElements.length; i++) {
         const element = mapElements[i];
+
+        // Check if element is still connected to the DOM
+        if (!element.isConnected) {
+          console.warn(`Map element ${i} is no longer in the DOM, skipping...`);
+          continue;
+        }
 
         // Try multiple interaction methods
         // Method 1: Regular click
@@ -261,7 +268,7 @@
         sendResponse({
           success: true,
           count: extractedData.length,
-          data: extractedData.slice(0, 5)
+          data: extractedData
         });
       } else {
         // Fallback to visible elements extraction
@@ -279,119 +286,143 @@
   function extractPropertiesFromDialog() {
     const properties = {};
 
-    // Look for property dialogs with multiple selector strategies
-    const dialogSelectors = [
-      '[class*="properties"]',
-      '[class*="dialog"]',
-      '[class*="modal"]',
-      '[class*="panel"]',
-      '[id*="properties"]',
-      '[id*="dialog"]',
-      '[role="dialog"]',
-      '.popup',
-      '.overlay'
-    ];
+    try {
+      // Look for property dialogs with multiple selector strategies
+      const dialogSelectors = [
+        '[class*="properties"]',
+        '[class*="dialog"]',
+        '[class*="modal"]',
+        '[class*="panel"]',
+        '[id*="properties"]',
+        '[id*="dialog"]',
+        '[role="dialog"]',
+        '.popup',
+        '.overlay'
+      ];
 
-    let dialog = null;
-    for (const selector of dialogSelectors) {
-      const elem = document.querySelector(selector);
-      if (elem && isVisible(elem)) {
-        dialog = elem;
-        break;
-      }
-    }
-
-    if (!dialog) {
-      // Try to find the most recently added visible element
-      // (properties panel might be dynamically added)
-      const allDivs = document.querySelectorAll('div');
-      for (let i = allDivs.length - 1; i >= 0; i--) {
-        const div = allDivs[i];
-        if (isVisible(div) && div.childElementCount > 3) {
-          dialog = div;
+      let dialog = null;
+      for (const selector of dialogSelectors) {
+        const elem = document.querySelector(selector);
+        if (elem && isVisible(elem)) {
+          dialog = elem;
           break;
         }
       }
-    }
 
-    if (!dialog) {
-      return properties;
-    }
-
-    // Method 1: Extract from label/input pairs
-    const labels = dialog.querySelectorAll('label');
-    labels.forEach(label => {
-      const labelText = label.textContent.trim().replace(/[:：]/g, '');
-
-      // Try to find associated input or value element
-      let valueElement = null;
-
-      // Check for 'for' attribute
-      if (label.htmlFor) {
-        valueElement = document.getElementById(label.htmlFor);
-      }
-
-      // Check next sibling
-      if (!valueElement) {
-        valueElement = label.nextElementSibling;
-      }
-
-      // Check children
-      if (!valueElement) {
-        valueElement = label.querySelector('input, span, .value');
-      }
-
-      if (valueElement) {
-        const value = valueElement.value || valueElement.textContent.trim();
-        if (value && labelText) {
-          properties[labelText] = value;
+      if (!dialog) {
+        // Try to find the most recently added visible element
+        // (properties panel might be dynamically added)
+        const allDivs = document.querySelectorAll('div');
+        for (let i = allDivs.length - 1; i >= Math.max(0, allDivs.length - 20); i--) {
+          const div = allDivs[i];
+          if (isVisible(div) && div.childElementCount > 3) {
+            dialog = div;
+            break;
+          }
         }
       }
-    });
 
-    // Method 2: Extract from input elements with name attributes
-    const inputs = dialog.querySelectorAll('input[name], select[name], textarea[name]');
-    inputs.forEach(input => {
-      const name = input.name || input.getAttribute('placeholder') || '';
-      const value = input.value || input.textContent;
-      if (name && value) {
-        properties[name] = value;
+      if (!dialog) {
+        return properties;
       }
-    });
 
-    // Method 3: Extract from definition lists (dl/dt/dd)
-    const terms = dialog.querySelectorAll('dt');
-    terms.forEach(term => {
-      const key = term.textContent.trim().replace(/[:：]/g, '');
-      const dd = term.nextElementSibling;
-      if (dd && dd.tagName === 'DD') {
-        const value = dd.textContent.trim();
-        if (key && value) {
-          properties[key] = value;
+      // Method 1: Extract from label/input pairs
+      const labels = dialog.querySelectorAll('label');
+      labels.forEach(label => {
+        try {
+          const labelText = label.textContent ? label.textContent.trim().replace(/[:：]/g, '') : '';
+
+          // Try to find associated input or value element
+          let valueElement = null;
+
+          // Check for 'for' attribute
+          if (label.htmlFor) {
+            valueElement = document.getElementById(label.htmlFor);
+          }
+
+          // Check next sibling
+          if (!valueElement) {
+            valueElement = label.nextElementSibling;
+          }
+
+          // Check children
+          if (!valueElement) {
+            valueElement = label.querySelector('input, span, .value');
+          }
+
+          if (valueElement) {
+            const value = valueElement.value || (valueElement.textContent ? valueElement.textContent.trim() : '');
+            if (value && labelText) {
+              properties[labelText] = value;
+            }
+          }
+        } catch (e) {
+          // Skip this label if there's an error
         }
-      }
-    });
-
-    // Method 4: Extract from key-value pair patterns in text
-    const textContent = dialog.textContent || '';
-    const lines = textContent.split('\n');
-    lines.forEach(line => {
-      const colonMatch = line.match(/^([^:：]+)[:：]\s*(.+)$/);
-      if (colonMatch) {
-        const key = colonMatch[1].trim();
-        const value = colonMatch[2].trim();
-        if (key && value && !properties[key]) {
-          properties[key] = value;
-        }
-      }
-    });
-
-    // Method 5: Extract from data attributes on the dialog itself
-    if (dialog.dataset) {
-      Object.keys(dialog.dataset).forEach(key => {
-        const formattedKey = key.replace(/([A-Z])/g, ' $1').trim();
-        properties[formattedKey] = dialog.dataset[key];
       });
+
+      // Method 2: Extract from input elements with name attributes
+      const inputs = dialog.querySelectorAll('input[name], select[name], textarea[name]');
+      inputs.forEach(input => {
+        try {
+          const name = input.name || input.getAttribute('placeholder') || '';
+          const value = input.value || input.textContent || '';
+          if (name && value) {
+            properties[name] = value;
+          }
+        } catch (e) {
+          // Skip this input if there's an error
+        }
+      });
+
+      // Method 3: Extract from definition lists (dl/dt/dd)
+      const terms = dialog.querySelectorAll('dt');
+      terms.forEach(term => {
+        try {
+          const key = term.textContent ? term.textContent.trim().replace(/[:：]/g, '') : '';
+          const dd = term.nextElementSibling;
+          if (dd && dd.tagName === 'DD') {
+            const value = dd.textContent ? dd.textContent.trim() : '';
+            if (key && value) {
+              properties[key] = value;
+            }
+          }
+        } catch (e) {
+          // Skip this term if there's an error
+        }
+      });
+
+      // Method 4: Extract from key-value pair patterns in text
+      const textContent = dialog.textContent || '';
+      const lines = textContent.split('\n');
+      lines.forEach(line => {
+        try {
+          const colonMatch = line.match(/^([^:：]+)[:：]\s*(.+)$/);
+          if (colonMatch && colonMatch[1] && colonMatch[2]) {
+            const key = colonMatch[1].trim();
+            const value = colonMatch[2].trim();
+            if (key && value && !properties[key]) {
+              properties[key] = value;
+            }
+          }
+        } catch (e) {
+          // Skip this line if there's an error
+        }
+      });
+
+      // Method 5: Extract from data attributes on the dialog itself
+      if (dialog.dataset) {
+        try {
+          Object.keys(dialog.dataset).forEach(key => {
+            const formattedKey = key.replace(/([A-Z])/g, ' $1').trim();
+            properties[formattedKey] = dialog.dataset[key];
+          });
+        } catch (e) {
+          // Skip dataset extraction if there's an error
+        }
+      }
+    } catch (error) {
+      console.warn('Error extracting properties from dialog:', error.message);
     }
 
     return properties;
