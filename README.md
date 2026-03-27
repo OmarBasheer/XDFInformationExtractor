@@ -9,7 +9,9 @@ This extension helps you extract XDF (eXtensible Data Format) map properties fro
 ## Features
 
 - 🔍 **Automatic Scanning**: Detects XDF maps on the current webpage
+- 🤖 **Automated Clicking**: Automatically clicks each map and extracts properties without manual intervention
 - 📊 **Batch Extraction**: Extracts data from multiple maps at once
+- 🎯 **Multi-Method Extraction**: Tries click, right-click, and double-click to trigger property dialogs
 - 💾 **CSV Export**: Downloads extracted data as a CSV file
 - 👀 **Data Preview**: Shows a preview of extracted data before downloading
 - 🎨 **User-Friendly Interface**: Clean and intuitive popup interface
@@ -73,6 +75,25 @@ The extension can extract the following properties from each map:
    - Choose where to save the `xdf_map_data.csv` file
    - Open the CSV file in Excel, Google Sheets, or any spreadsheet application
 
+### How the Automated Extraction Works
+
+The extension eliminates the need to manually right-click each map by:
+
+1. **Detecting all map elements** on the page
+2. **Automatically interacting with each map** using:
+   - Regular click
+   - Right-click (contextmenu)
+   - Double-click
+3. **Capturing the properties** that appear in dialogs/panels
+4. **Extracting all label-value pairs** from:
+   - Form labels and inputs
+   - Definition lists
+   - Text patterns (e.g., "Address Start: 0x1000")
+   - Data attributes
+5. **Closing dialogs** between maps to prepare for the next one
+
+This means you can extract data from 300+ maps in seconds instead of manually clicking each one!
+
 ### Tips for Best Results
 
 - **Ensure the page is fully loaded** before scanning for maps
@@ -80,8 +101,9 @@ The extension can extract the following properties from each map:
   - Refreshing the page
   - Opening/expanding the map list if it's collapsed
   - Making sure you're on the correct page section
-- **For large mappacks (300+ maps)**, the extraction may take a few seconds
-- **If data extraction fails**, you may need to customize the content script for your specific website structure (see Customization section)
+- **For large mappacks (300+ maps)**, the extraction may take 30-60 seconds as it clicks through each map
+- **Watch the browser console** (F12) to see extraction progress - it logs every 10 maps processed
+- **If automated extraction fails**, the extension will fall back to visible element parsing
 
 ## Customization
 
@@ -142,9 +164,17 @@ XDFInformationExtractor/
 
 1. **Content Script Injection**: When you visit a webpage, the content script (`content.js`) is injected and runs in the page context
 2. **Map Detection**: The script scans the DOM for elements that might contain map data
-3. **Data Extraction**: When triggered, it extracts structured data from detected elements
-4. **CSV Generation**: The popup script converts the extracted data to CSV format
-5. **File Download**: The browser's download API saves the CSV file to your chosen location
+3. **Automated Interaction**: When triggered, it automatically:
+   - Clicks on each map element (using click, right-click, or double-click)
+   - Waits for the properties panel/dialog to appear
+   - Extracts all labels and input values from the properties display
+   - Closes the dialog and moves to the next map
+4. **Smart Extraction**: The extension uses multiple strategies:
+   - JavaScript API detection (fastest)
+   - Automated clicking with property extraction (most reliable)
+   - Visible element parsing (fallback)
+5. **CSV Generation**: The popup script converts the extracted data to CSV format
+6. **File Download**: The browser's download API saves the CSV file to your chosen location
 
 ## Troubleshooting
 
@@ -214,19 +244,21 @@ This extension requires the following permissions:
 
 ## Known Limitations
 
-- Generic extraction may not work with all mappack viewer implementations
-- Some websites may use dynamic content that requires custom handling
-- Right-click context menu automation is limited by browser security
+- Some websites may use custom UI frameworks that require specific selectors
+- Automated clicking may need timing adjustments for slow-loading properties dialogs
+- Some context menus may be browser-restricted and won't respond to programmatic right-clicks
 - Firefox requires manual reload after browser restart (or proper signing)
+- Very large mappacks (1000+ maps) may take several minutes to process
 
 ## Future Enhancements
 
 Potential improvements for future versions:
-- [ ] Auto-detect common mappack viewer patterns
+- [ ] Configurable timing delays for different website speeds
+- [ ] Progress bar in the popup during extraction
 - [ ] Support for additional export formats (JSON, Excel)
-- [ ] Batch processing with progress indicators
 - [ ] Custom field mapping UI
 - [ ] Preset configurations for popular XDF tools
+- [ ] Parallel extraction for faster processing
 
 ## Contributing
 
@@ -258,6 +290,10 @@ This project is provided as-is for extracting XDF map data from web-based mappac
 
 ### Version 1.0.0 (Initial Release)
 - Basic map scanning and detection
+- **Automated map clicking and property extraction**
+- **Multi-method interaction** (click, right-click, double-click)
+- **Intelligent property dialog detection** with multiple selector strategies
+- **Smart extraction** from labels, inputs, definition lists, and text patterns
 - Data extraction from webpage elements
 - CSV export functionality
 - User-friendly popup interface

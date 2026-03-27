@@ -2,6 +2,32 @@
 
 This guide will help you customize the extension to work with your specific mappack viewer website.
 
+## How the Automated Extraction Works
+
+The extension now includes **automated map clicking and property extraction** that eliminates the need to manually right-click each map. Here's how it works:
+
+### Extraction Strategies (in order of priority)
+
+1. **JavaScript API Detection**: Checks if the website exposes map data through global variables (e.g., `window.mapData`, `window.xdfData`)
+
+2. **Automated Clicking**:
+   - Automatically clicks on each detected map element
+   - Tries multiple interaction methods: click, right-click, double-click
+   - Waits for properties panel/dialog to appear
+   - Extracts all labels and input values from the properties display
+   - Closes the dialog and moves to the next map
+
+3. **Visible Elements Extraction**: Falls back to extracting data directly from visible page elements
+
+### What Gets Extracted
+
+The automated extraction looks for properties in multiple formats:
+- **Label/Input pairs**: `<label>Address Start:</label><input value="0x1000">`
+- **Definition lists**: `<dt>Address Start</dt><dd>0x1000</dd>`
+- **Named inputs**: `<input name="addressStart" value="0x1000">`
+- **Text patterns**: Any text matching "Label: Value" format
+- **Data attributes**: Elements with `data-*` attributes
+
 ## Quick Diagnosis
 
 Before customizing, let's figure out how your website is structured:
