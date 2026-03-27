@@ -4,6 +4,7 @@
 
   // Store extracted data
   let extractedData = [];
+  let mapElements = [];
 
   // Listen for messages from popup
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -36,7 +37,7 @@
         'tr'
       ];
 
-      let maps = [];
+      mapElements = [];
 
       for (const selector of possibleSelectors) {
         const elements = document.querySelectorAll(selector);
@@ -44,22 +45,22 @@
           // Check if elements have properties that look like map data
           for (const elem of elements) {
             if (hasMapProperties(elem)) {
-              maps.push(elem);
+              mapElements.push(elem);
             }
           }
-          if (maps.length > 0) break;
+          if (mapElements.length > 0) break;
         }
       }
 
       // If no maps found with specific selectors, try to find clickable elements
-      if (maps.length === 0) {
-        maps = findClickableMapElements();
+      if (mapElements.length === 0) {
+        mapElements = findClickableMapElements();
       }
 
       sendResponse({
         success: true,
-        count: maps.length,
-        message: `Found ${maps.length} potential map elements`
+        count: mapElements.length,
+        message: `Found ${mapElements.length} potential map elements`
       });
     } catch (error) {
       sendResponse({
@@ -100,16 +101,23 @@
     try {
       extractedData = [];
 
-      // Strategy 1: Look for a properties dialog or panel
-      const propertyDialog = findPropertyDialog();
-
-      if (propertyDialog) {
-        extractFromPropertyDialog(sendResponse);
+      // Strategy 1: Try to extract from JavaScript API or embedded JSON
+      const apiData = extractFromJavaScriptAPI();
+      if (apiData && apiData.length > 0) {
+        extractedData = apiData;
+        sendResponse({
+          success: true,
+          count: extractedData.length,
+          data: extractedData.slice(0, 5)
+        });
         return;
       }
 
-      // Strategy 2: Try to trigger right-click context menu programmatically
-      // This is complex and may not work on all sites due to security restrictions
+      // Strategy 2: Automatically click on each map and extract properties
+      if (mapElements.length > 0) {
+        extractByClickingMaps(sendResponse);
+        return;
+      }
 
       // Strategy 3: Extract visible data from the page
       extractFromVisibleElements(sendResponse);
@@ -122,38 +130,9 @@
     }
   }
 
-  // Find property dialog or panel
-  function findPropertyDialog() {
-    const selectors = [
-      '[class*="properties"]',
-      '[class*="dialog"]',
-      '[id*="properties"]',
-      '[id*="dialog"]',
-      '.modal',
-      '[role="dialog"]'
-    ];
-
-    for (const selector of selectors) {
-      const elem = document.querySelector(selector);
-      if (elem && isVisible(elem)) {
-        return elem;
-      }
-    }
-    return null;
-  }
-
   // Check if element is visible
   function isVisible(elem) {
     return elem && elem.offsetParent !== null;
-  }
-
-  // Extract data from property dialog
-  function extractFromPropertyDialog(sendResponse) {
-    // This would need to be customized based on the actual dialog structure
-    sendResponse({
-      success: false,
-      error: 'Property dialog extraction requires manual implementation based on website structure'
-    });
   }
 
   // Extract data from visible elements on the page
@@ -214,6 +193,281 @@
     }
 
     return data;
+  }
+
+  // Helper function for delays
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // Extract data by automatically clicking on each map
+  async function extractByClickingMaps(sendResponse) {
+    try {
+      const totalMaps = mapElements.length;
+      console.log(`Starting automated extraction from ${totalMaps} maps...`);
+
+      for (let i = 0; i < mapElements.length; i++) {
+        const element = mapElements[i];
+
+        // Try multiple interaction methods
+        // Method 1: Regular click
+        element.click();
+        await sleep(150);
+
+        // Check if a properties panel appeared
+        let properties = extractPropertiesFromDialog();
+
+        if (!properties || Object.keys(properties).length === 0) {
+          // Method 2: Try right-click (contextmenu event)
+          element.dispatchEvent(new MouseEvent('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+            button: 2
+          }));
+          await sleep(150);
+
+          properties = extractPropertiesFromDialog();
+        }
+
+        if (!properties || Object.keys(properties).length === 0) {
+          // Method 3: Try double-click
+          element.dispatchEvent(new MouseEvent('dblclick', {
+            bubbles: true,
+            cancelable: true,
+            view: window
+          }));
+          await sleep(150);
+
+          properties = extractPropertiesFromDialog();
+        }
+
+        // If we got properties, add them to the extracted data
+        if (properties && Object.keys(properties).length > 0) {
+          extractedData.push(properties);
+        }
+
+        // Try to close any open dialog/panel to prepare for the next map
+        closePropertyDialog();
+        await sleep(50);
+
+        // Update progress every 10 maps
+        if ((i + 1) % 10 === 0) {
+          console.log(`Extracted ${i + 1}/${totalMaps} maps...`);
+        }
+      }
+
+      if (extractedData.length > 0) {
+        sendResponse({
+          success: true,
+          count: extractedData.length,
+          data: extractedData.slice(0, 5)
+        });
+      } else {
+        // Fallback to visible elements extraction
+        extractFromVisibleElements(sendResponse);
+      }
+    } catch (error) {
+      sendResponse({
+        success: false,
+        error: 'Automated extraction failed: ' + error.message
+      });
+    }
+  }
+
+  // Extract properties from a dialog/panel that appears after clicking
+  function extractPropertiesFromDialog() {
+    const properties = {};
+
+    // Look for property dialogs with multiple selector strategies
+    const dialogSelectors = [
+      '[class*="properties"]',
+      '[class*="dialog"]',
+      '[class*="modal"]',
+      '[class*="panel"]',
+      '[id*="properties"]',
+      '[id*="dialog"]',
+      '[role="dialog"]',
+      '.popup',
+      '.overlay'
+    ];
+
+    let dialog = null;
+    for (const selector of dialogSelectors) {
+      const elem = document.querySelector(selector);
+      if (elem && isVisible(elem)) {
+        dialog = elem;
+        break;
+      }
+    }
+
+    if (!dialog) {
+      // Try to find the most recently added visible element
+      // (properties panel might be dynamically added)
+      const allDivs = document.querySelectorAll('div');
+      for (let i = allDivs.length - 1; i >= 0; i--) {
+        const div = allDivs[i];
+        if (isVisible(div) && div.childElementCount > 3) {
+          dialog = div;
+          break;
+        }
+      }
+    }
+
+    if (!dialog) {
+      return properties;
+    }
+
+    // Method 1: Extract from label/input pairs
+    const labels = dialog.querySelectorAll('label');
+    labels.forEach(label => {
+      const labelText = label.textContent.trim().replace(/[:：]/g, '');
+
+      // Try to find associated input or value element
+      let valueElement = null;
+
+      // Check for 'for' attribute
+      if (label.htmlFor) {
+        valueElement = document.getElementById(label.htmlFor);
+      }
+
+      // Check next sibling
+      if (!valueElement) {
+        valueElement = label.nextElementSibling;
+      }
+
+      // Check children
+      if (!valueElement) {
+        valueElement = label.querySelector('input, span, .value');
+      }
+
+      if (valueElement) {
+        const value = valueElement.value || valueElement.textContent.trim();
+        if (value && labelText) {
+          properties[labelText] = value;
+        }
+      }
+    });
+
+    // Method 2: Extract from input elements with name attributes
+    const inputs = dialog.querySelectorAll('input[name], select[name], textarea[name]');
+    inputs.forEach(input => {
+      const name = input.name || input.getAttribute('placeholder') || '';
+      const value = input.value || input.textContent;
+      if (name && value) {
+        properties[name] = value;
+      }
+    });
+
+    // Method 3: Extract from definition lists (dl/dt/dd)
+    const terms = dialog.querySelectorAll('dt');
+    terms.forEach(term => {
+      const key = term.textContent.trim().replace(/[:：]/g, '');
+      const dd = term.nextElementSibling;
+      if (dd && dd.tagName === 'DD') {
+        const value = dd.textContent.trim();
+        if (key && value) {
+          properties[key] = value;
+        }
+      }
+    });
+
+    // Method 4: Extract from key-value pair patterns in text
+    const textContent = dialog.textContent || '';
+    const lines = textContent.split('\n');
+    lines.forEach(line => {
+      const colonMatch = line.match(/^([^:：]+)[:：]\s*(.+)$/);
+      if (colonMatch) {
+        const key = colonMatch[1].trim();
+        const value = colonMatch[2].trim();
+        if (key && value && !properties[key]) {
+          properties[key] = value;
+        }
+      }
+    });
+
+    // Method 5: Extract from data attributes on the dialog itself
+    if (dialog.dataset) {
+      Object.keys(dialog.dataset).forEach(key => {
+        const formattedKey = key.replace(/([A-Z])/g, ' $1').trim();
+        properties[formattedKey] = dialog.dataset[key];
+      });
+    }
+
+    return properties;
+  }
+
+  // Try to close any open property dialog
+  function closePropertyDialog() {
+    // Common close button selectors
+    const closeSelectors = [
+      '.close',
+      '.close-button',
+      '[aria-label="Close"]',
+      '[aria-label="close"]',
+      '.modal-close',
+      '.dialog-close',
+      'button.close',
+      '[class*="close"]'
+    ];
+
+    for (const selector of closeSelectors) {
+      const closeBtn = document.querySelector(selector);
+      if (closeBtn && isVisible(closeBtn)) {
+        closeBtn.click();
+        return;
+      }
+    }
+
+    // Try pressing Escape key
+    document.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'Escape',
+      code: 'Escape',
+      keyCode: 27,
+      bubbles: true
+    }));
+  }
+
+  // Extract from JavaScript API if available
+  function extractFromJavaScriptAPI() {
+    // Check common global variable names
+    const possibleAPIs = [
+      'mapData',
+      'xdfData',
+      'maps',
+      'xdfMaps',
+      'mapList'
+    ];
+
+    for (const apiName of possibleAPIs) {
+      if (window[apiName] && Array.isArray(window[apiName])) {
+        return window[apiName];
+      }
+    }
+
+    // Check for nested structures
+    if (window.app && window.app.maps) {
+      return window.app.maps;
+    }
+
+    if (window.data && window.data.maps) {
+      return window.data.maps;
+    }
+
+    // Try to extract from embedded JSON
+    const scripts = document.querySelectorAll('script[type="application/json"]');
+    for (const script of scripts) {
+      try {
+        const data = JSON.parse(script.textContent);
+        if (data.maps || data.mapData) {
+          return data.maps || data.mapData;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+
+    return null;
   }
 
   // Signal that content script is loaded
